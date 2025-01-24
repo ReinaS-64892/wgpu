@@ -319,22 +319,29 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                 value,
                 size: crate::VectorSize::Quad,
             }),
-            crate::TypeInner::Vector { size, .. } => {
-                if size != crate::VectorSize::Quad {
-                    Some(crate::Expression::Swizzle {
-                        size: crate::VectorSize::Quad,
-                        vector: value,
-                        pattern: [
-                            crate::SwizzleComponent::X,
-                            crate::SwizzleComponent::Y,
-                            crate::SwizzleComponent::Y,
-                            crate::SwizzleComponent::Y,
-                        ],
-                    })
-                } else {
-                    None
-                }
-            }
+            crate::TypeInner::Vector { size, .. } => match size {
+                crate::VectorSize::Bi => Some(crate::Expression::Swizzle {
+                    size: crate::VectorSize::Quad,
+                    vector: value,
+                    pattern: [
+                        crate::SwizzleComponent::X,
+                        crate::SwizzleComponent::Y,
+                        crate::SwizzleComponent::Y,
+                        crate::SwizzleComponent::Y,
+                    ],
+                }),
+                crate::VectorSize::Tri => Some(crate::Expression::Swizzle {
+                    size: crate::VectorSize::Quad,
+                    vector: value,
+                    pattern: [
+                        crate::SwizzleComponent::X,
+                        crate::SwizzleComponent::Y,
+                        crate::SwizzleComponent::Z,
+                        crate::SwizzleComponent::Z,
+                    ],
+                }),
+                crate::VectorSize::Quad => None,
+            },
             _ => return Err(Error::InvalidVectorType(value_type)),
         };
 
