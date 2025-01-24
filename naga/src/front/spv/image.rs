@@ -311,55 +311,34 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 
         let value_lexp = self.lookup_expression.lookup(value_id)?;
         let value = self.get_expr_handle(value_id, value_lexp, ctx, emitter, block, body_idx);
+        let value_type = self.lookup_type.lookup(value_lexp.type_id)?.handle;
 
         // In hlsl etc, the write value may not be the vector 4.
-        let swizzled_value = match ctx.module.types[image_ty].inner {
-            crate::TypeInner::Image {
-                dim: _,
-                arrayed: _,
-                class: crate::ImageClass::Storage { format, access: _ },
-            } => match format {
-                crate::StorageFormat::Rg8Unorm
-                | crate::StorageFormat::Rg8Snorm
-                | crate::StorageFormat::Rg8Uint
-                | crate::StorageFormat::Rg8Sint
-                | crate::StorageFormat::Rg16Uint
-                | crate::StorageFormat::Rg16Sint
-                | crate::StorageFormat::Rg16Float
-                | crate::StorageFormat::Rg32Uint
-                | crate::StorageFormat::Rg32Sint
-                | crate::StorageFormat::Rg32Float => Some(crate::Expression::Swizzle {
-                    size: crate::VectorSize::Quad,
-                    vector: value,
-                    pattern: [
-                        crate::SwizzleComponent::X,
-                        crate::SwizzleComponent::Y,
-                        crate::SwizzleComponent::Y,
-                        crate::SwizzleComponent::Y,
-                    ],
-                }),
-
-                crate::StorageFormat::R8Unorm
-                | crate::StorageFormat::R8Snorm
-                | crate::StorageFormat::R8Uint
-                | crate::StorageFormat::R8Sint
-                | crate::StorageFormat::R16Uint
-                | crate::StorageFormat::R16Sint
-                | crate::StorageFormat::R16Float
-                | crate::StorageFormat::R32Uint
-                | crate::StorageFormat::R32Sint
-                | crate::StorageFormat::R32Float
-                | crate::StorageFormat::R16Unorm
-                | crate::StorageFormat::R16Snorm => Some(crate::Expression::Splat {
-                    value,
-                    size: crate::VectorSize::Quad,
-                }),
-                _ => None,
-            },
-            _ => None,
+        let expanded_value = match ctx.module.types[value_type].inner {
+            crate::TypeInner::Scalar(_) => Some(crate::Expression::Splat {
+                value,
+                size: crate::VectorSize::Quad,
+            }),
+            crate::TypeInner::Vector { size, .. } => {
+                if size != crate::VectorSize::Quad {
+                    Some(crate::Expression::Swizzle {
+                        size: crate::VectorSize::Quad,
+                        vector: value,
+                        pattern: [
+                            crate::SwizzleComponent::X,
+                            crate::SwizzleComponent::Y,
+                            crate::SwizzleComponent::Y,
+                            crate::SwizzleComponent::Y,
+                        ],
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => return Err(Error::InvalidVectorType(value_type)),
         };
 
-        let value_patched = if let Some(s) = swizzled_value {
+        let value_patched = if let Some(s) = expanded_value {
             ctx.expressions.append(s, crate::Span::default())
         } else {
             value
